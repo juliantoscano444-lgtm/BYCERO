@@ -1,0 +1,601 @@
+-- Panel Staff Avanzado de Jugadores para Delta (Chamos City)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local Camera = workspace.CurrentCamera
+local HttpService = game:GetService("HttpService")
+
+-- Configuración
+local INTERVALO_CICLO = 3
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1553484587433201876/5pbl04odYxShz3wNNPTZ_dxsgB1rZuM4gEP0f6xvdK2ZSxlAPzUZTHUg3Uk3VJ36jIC4"
+
+-- Limpieza de instancias anteriores
+if CoreGui:FindFirstChild("ChamosCityPanel") then
+    CoreGui.ChamosCityPanel:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ChamosCityPanel"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+
+---------------------------------------------------------
+-- WIDGET INFERIOR (INDICADOR OBSERVANDO / COPIAR USER / REPORTAR)
+---------------------------------------------------------
+local spectateBar = Instance.new("Frame")
+spectateBar.Name = "SpectateBar"
+spectateBar.Size = UDim2.new(0, 310, 0, 46)
+spectateBar.Position = UDim2.new(0.5, -155, 1, -58)
+spectateBar.BackgroundColor3 = Color3.fromRGB(15, 18, 24)
+spectateBar.Visible = false
+spectateBar.Parent = screenGui
+
+local specBarCorner = Instance.new("UICorner")
+specBarCorner.CornerRadius = UDim.new(0, 8)
+specBarCorner.Parent = spectateBar
+
+local specBarStroke = Instance.new("UIStroke")
+specBarStroke.Color = Color3.fromRGB(0, 180, 240)
+specBarStroke.Thickness = 1.2
+specBarStroke.Parent = spectateBar
+
+local specAvatar = Instance.new("ImageLabel")
+specAvatar.Size = UDim2.new(0, 32, 0, 32)
+specAvatar.Position = UDim2.new(0, 6, 0.5, -16)
+specAvatar.BackgroundTransparency = 1
+specAvatar.Parent = spectateBar
+
+local specAvatarCorner = Instance.new("UICorner")
+specAvatarCorner.CornerRadius = UDim.new(1, 0)
+specAvatarCorner.Parent = specAvatar
+
+local specNameLabel = Instance.new("TextLabel")
+specNameLabel.Size = UDim2.new(0, 100, 0, 15)
+specNameLabel.Position = UDim2.new(0, 42, 0, 4)
+specNameLabel.BackgroundTransparency = 1
+specNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+specNameLabel.Font = Enum.Font.SourceSansBold
+specNameLabel.TextSize = 12
+specNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+specNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+specNameLabel.Parent = spectateBar
+
+-- Botón/Texto con Username Copiable
+local userCopyBtn = Instance.new("TextButton")
+userCopyBtn.Size = UDim2.new(0, 100, 0, 13)
+userCopyBtn.Position = UDim2.new(0, 42, 0, 18)
+userCopyBtn.BackgroundTransparency = 1
+userCopyBtn.TextColor3 = Color3.fromRGB(0, 200, 255)
+userCopyBtn.Font = Enum.Font.SourceSans
+userCopyBtn.TextSize = 10
+userCopyBtn.TextXAlignment = Enum.TextXAlignment.Left
+userCopyBtn.TextTruncate = Enum.TextTruncate.AtEnd
+userCopyBtn.Parent = spectateBar
+
+local currentUsernameToCopy = ""
+
+userCopyBtn.MouseButton1Click:Connect(function()
+    if currentUsernameToCopy ~= "" then
+        if setclipboard then
+            setclipboard(currentUsernameToCopy)
+            local oldText = userCopyBtn.Text
+            userCopyBtn.Text = "¡Copiado! ✓"
+            userCopyBtn.TextColor3 = Color3.fromRGB(50, 220, 100)
+            task.delay(1.2, function()
+                userCopyBtn.Text = oldText
+                userCopyBtn.TextColor3 = Color3.fromRGB(0, 200, 255)
+            end)
+        end
+    end
+end)
+
+local specStatusLabel = Instance.new("TextLabel")
+specStatusLabel.Size = UDim2.new(0, 100, 0, 11)
+specStatusLabel.Position = UDim2.new(0, 42, 0, 31)
+specStatusLabel.BackgroundTransparency = 1
+specStatusLabel.Text = "OBSERVANDO"
+specStatusLabel.TextColor3 = Color3.fromRGB(130, 140, 150)
+specStatusLabel.Font = Enum.Font.SourceSans
+specStatusLabel.TextSize = 8
+specStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+specStatusLabel.Parent = spectateBar
+
+-- Botón REPORTAR a Discord
+local reportBtn = Instance.new("TextButton")
+reportBtn.Size = UDim2.new(0, 75, 0, 24)
+reportBtn.Position = UDim2.new(1, -152, 0.5, -12)
+reportBtn.BackgroundColor3 = Color3.fromRGB(210, 80, 0)
+reportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+reportBtn.Text = "🚨 REPORTAR"
+reportBtn.Font = Enum.Font.SourceSansBold
+reportBtn.TextSize = 9
+reportBtn.Parent = spectateBar
+
+local reportCorner = Instance.new("UICorner")
+reportCorner.CornerRadius = UDim.new(0, 5)
+reportCorner.Parent = reportBtn
+
+-- Botón DEJAR VER
+local dejarVerBtn = Instance.new("TextButton")
+dejarVerBtn.Size = UDim2.new(0, 68, 0, 24)
+dejarVerBtn.Position = UDim2.new(1, -73, 0.5, -12)
+dejarVerBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+dejarVerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+dejarVerBtn.Text = "DEJAR VER"
+dejarVerBtn.Font = Enum.Font.SourceSansBold
+dejarVerBtn.TextSize = 9
+dejarVerBtn.Parent = spectateBar
+
+local dejarVerCorner = Instance.new("UICorner")
+dejarVerCorner.CornerRadius = UDim.new(0, 5)
+dejarVerCorner.Parent = dejarVerBtn
+
+---------------------------------------------------------
+-- VENTANA POPUP DE RAZÓN DE REPORTE
+---------------------------------------------------------
+local reportModalFrame = Instance.new("Frame")
+reportModalFrame.Name = "ReportModalFrame"
+reportModalFrame.Size = UDim2.new(0, 250, 0, 160)
+reportModalFrame.Position = UDim2.new(0.5, -125, 0.5, -80)
+reportModalFrame.BackgroundColor3 = Color3.fromRGB(18, 22, 28)
+reportModalFrame.Visible = false
+reportModalFrame.Active = true
+reportModalFrame.Draggable = true
+reportModalFrame.Parent = screenGui
+
+local modalCorner = Instance.new("UICorner")
+modalCorner.CornerRadius = UDim.new(0, 8)
+modalCorner.Parent = reportModalFrame
+
+local modalStroke = Instance.new("UIStroke")
+modalStroke.Color = Color3.fromRGB(220, 60, 60)
+modalStroke.Thickness = 1.5
+modalStroke.Parent = reportModalFrame
+
+local modalTitle = Instance.new("TextLabel")
+modalTitle.Size = UDim2.new(1, -20, 0, 22)
+modalTitle.Position = UDim2.new(0, 10, 0, 8)
+modalTitle.BackgroundTransparency = 1
+modalTitle.Text = "🚨 MOTIVO DEL REPORTE"
+modalTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+modalTitle.Font = Enum.Font.SourceSansBold
+modalTitle.TextSize = 12
+modalTitle.TextXAlignment = Enum.TextXAlignment.Left
+modalTitle.Parent = reportModalFrame
+
+local closeReportModalBtn = Instance.new("TextButton")
+closeReportModalBtn.Size = UDim2.new(0, 20, 0, 20)
+closeReportModalBtn.Position = UDim2.new(1, -25, 0, 8)
+closeReportModalBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+closeReportModalBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeReportModalBtn.Text = "X"
+closeReportModalBtn.Font = Enum.Font.SourceSansBold
+closeReportModalBtn.TextSize = 10
+closeReportModalBtn.Parent = reportModalFrame
+
+local closeReportCorner = Instance.new("UICorner")
+closeReportCorner.CornerRadius = UDim.new(0, 4)
+closeReportCorner.Parent = closeReportModalBtn
+
+local reportReasonBox = Instance.new("TextBox")
+reportReasonBox.Size = UDim2.new(1, -20, 0, 70)
+reportReasonBox.Position = UDim2.new(0, 10, 0, 36)
+reportReasonBox.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+reportReasonBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+reportReasonBox.PlaceholderText = "Escribe aquí la razón del reporte..."
+reportReasonBox.PlaceholderColor3 = Color3.fromRGB(120, 130, 140)
+reportReasonBox.Font = Enum.Font.SourceSans
+reportReasonBox.TextSize = 11
+reportReasonBox.TextXAlignment = Enum.TextXAlignment.Left
+reportReasonBox.TextYAlignment = Enum.TextYAlignment.Top
+reportReasonBox.ClearTextOnFocus = false
+reportReasonBox.TextWrapped = true
+reportReasonBox.Text = ""
+reportReasonBox.Parent = reportModalFrame
+
+local reasonCorner = Instance.new("UICorner")
+reasonCorner.CornerRadius = UDim.new(0, 5)
+reasonCorner.Parent = reportReasonBox
+
+local sendReportModalBtn = Instance.new("TextButton")
+sendReportModalBtn.Size = UDim2.new(1, -20, 0, 26)
+sendReportModalBtn.Position = UDim2.new(0, 10, 1, -32)
+sendReportModalBtn.BackgroundColor3 = Color3.fromRGB(210, 80, 0)
+sendReportModalBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+sendReportModalBtn.Text = "ENVIAR REPORTE"
+sendReportModalBtn.Font = Enum.Font.SourceSansBold
+sendReportModalBtn.TextSize = 11
+sendReportModalBtn.Parent = reportModalFrame
+
+local sendModalCorner = Instance.new("UICorner")
+sendModalCorner.CornerRadius = UDim.new(0, 5)
+sendModalCorner.Parent = sendReportModalBtn
+
+---------------------------------------------------------
+-- BOTÓN FLOTANTE "STAFF"
+---------------------------------------------------------
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 65, 0, 24)
+toggleButton.Position = UDim2.new(0, 10, 0.45, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(15, 18, 24)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 10
+toggleButton.Text = "STAFF"
+toggleButton.Parent = screenGui
+toggleButton.Active = true
+toggleButton.Draggable = true
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(0, 200, 255)
+toggleStroke.Thickness = 1.2
+toggleStroke.Parent = toggleButton
+
+---------------------------------------------------------
+-- MARCO PRINCIPAL (Panel Staff Compacto)
+---------------------------------------------------------
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 270, 0, 330)
+mainFrame.Position = UDim2.new(0.5, -135, 0.5, -165)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 22)
+mainFrame.Visible = false
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = mainFrame
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Color = Color3.fromRGB(0, 200, 255)
+frameStroke.Thickness = 1.5
+frameStroke.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 140, 0, 20)
+titleLabel.Position = UDim2.new(0, 10, 0, 8)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "CHAMOS CITY | STAFF"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 13
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = mainFrame
+
+local onlineLabel = Instance.new("TextLabel")
+onlineLabel.Name = "OnlineLabel"
+onlineLabel.Size = UDim2.new(0, 65, 0, 20)
+onlineLabel.Position = UDim2.new(1, -125, 0, 8)
+onlineLabel.BackgroundTransparency = 1
+onlineLabel.Text = "Online: 0"
+onlineLabel.TextColor3 = Color3.fromRGB(180, 190, 200)
+onlineLabel.Font = Enum.Font.SourceSans
+onlineLabel.TextSize = 11
+onlineLabel.TextXAlignment = Enum.TextXAlignment.Right
+onlineLabel.Parent = mainFrame
+
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Size = UDim2.new(0, 22, 0, 22)
+refreshBtn.Position = UDim2.new(1, -54, 0, 7)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+refreshBtn.Text = "↻"
+refreshBtn.Font = Enum.Font.SourceSansBold
+refreshBtn.TextSize = 13
+refreshBtn.Parent = mainFrame
+
+local refreshCorner = Instance.new("UICorner")
+refreshCorner.CornerRadius = UDim.new(0, 5)
+refreshCorner.Parent = refreshBtn
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -27, 0, 7)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 45, 45)
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Text = "X"
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 11
+closeBtn.Parent = mainFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 5)
+closeCorner.Parent = closeBtn
+
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -20, 0, 24)
+searchBox.Position = UDim2.new(0, 10, 0, 44)
+searchBox.BackgroundColor3 = Color3.fromRGB(22, 26, 34)
+searchBox.TextColor3 = Color3.fromRGB(0, 200, 255)
+searchBox.PlaceholderText = "🔍 Buscar jugador por nombre..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(100, 110, 125)
+searchBox.Font = Enum.Font.SourceSans
+searchBox.TextSize = 11
+searchBox.Text = ""
+searchBox.Parent = mainFrame
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 5)
+searchCorner.Parent = searchBox
+
+local line = Instance.new("Frame")
+line.Size = UDim2.new(1, -20, 0, 1)
+line.Position = UDim2.new(0, 10, 0, 74)
+line.BackgroundColor3 = Color3.fromRGB(0, 180, 220)
+line.BorderSizePixel = 0
+line.Parent = mainFrame
+
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1, -16, 1, -82)
+scroll.Position = UDim2.new(0, 8, 0, 78)
+scroll.BackgroundTransparency = 1
+scroll.BorderSizePixel = 0
+scroll.ScrollBarThickness = 3
+scroll.Parent = mainFrame
+
+local uiList = Instance.new("UIListLayout")
+uiList.Parent = scroll
+uiList.SortOrder = Enum.SortOrder.LayoutOrder
+uiList.Padding = UDim.new(0, 4)
+
+uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scroll.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y)
+end)
+
+---------------------------------------------------------
+-- LÓGICA DE ESPECTADOR Y DISCORD
+---------------------------------------------------------
+local spectatingTarget = nil
+
+local function sendDiscordReport(targetPlayer, reason)
+    if not targetPlayer then return end
+    
+    local currentTime = os.date("*t")
+    local fecha = string.format("%02d/%02d/%04d", currentTime.day, currentTime.month, currentTime.year)
+    local hora = string.format("%02d:%02d:%02d", currentTime.hour, currentTime.min, currentTime.sec)
+    
+    local dias = {"Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"}
+    local diaSemana = dias[currentTime.wday] or "Desconocido"
+
+    local serverLink = "https://www.roblox.com/games/" .. tostring(game.PlaceId) .. "?jobId=" .. tostring(game.JobId)
+
+    local accountAgeDays = targetPlayer.AccountAge or 0
+    local creationTimestamp = os.time() - (accountAgeDays * 86400)
+    local creationDate = os.date("%d/%m/%Y", creationTimestamp)
+    
+    local totalYears = math.floor(accountAgeDays / 365)
+    local remainingDaysAfterYears = accountAgeDays % 365
+    local totalMonths = math.floor(remainingDaysAfterYears / 30)
+    local remainingDays = remainingDaysAfterYears % 30
+
+    local formattedAge = ""
+    if totalYears > 0 then formattedAge = formattedAge .. totalYears .. (totalYears == 1 and " año, " or " años, ") end
+    if totalMonths > 0 then formattedAge = formattedAge .. totalMonths .. (totalMonths == 1 and " mes, " or " meses, ") end
+    formattedAge = formattedAge .. remainingDays .. (remainingDays == 1 and " día" or " días") .. " (" .. tostring(accountAgeDays) .. " días en total)"
+
+    local payload = {
+        ["embeds"] = {{
+            ["title"] = "🚨 Nuevo Reporte de Staff - Chamos city",
+            ["color"] = 16724787,
+            ["fields"] = {
+                { ["name"] = "👤 Usuario Reportado", ["value"] = "**Display:** " .. targetPlayer.DisplayName .. "\n**Username:** @" .. targetPlayer.Name .. "\n**ID:** " .. tostring(targetPlayer.UserId), ["inline"] = false },
+                { ["name"] = "📅 Creación de la Cuenta", ["value"] = "**Fecha:** " .. creationDate, ["inline"] = true },
+                { ["name"] = "⏳ Tiempo de la Cuenta", ["value"] = formattedAge, ["inline"] = true },
+                { ["name"] = "📝 Motivo / Razón", ["value"] = "```" .. reason .. "```", ["inline"] = false },
+                { ["name"] = "🛡️ Staff Emisor", ["value"] = "**Display:** " .. LocalPlayer.DisplayName .. "\n**Username:** @" .. LocalPlayer.Name .. "\n**ID:** " .. tostring(LocalPlayer.UserId), ["inline"] = false },
+                { ["name"] = "🎮 Servidor / Juego", ["value"] = "[Chamos city] (" .. serverLink .. ")", ["inline"] = false },
+                { ["name"] = "📅 Fecha del Reporte", ["value"] = diaSemana .. " - " .. fecha, ["inline"] = true },
+                { ["name"] = "⏰ Hora", ["value"] = hora, ["inline"] = true }
+            },
+            ["footer"] = { ["text"] = "Sistema de Reportes Chamos City Staff" }
+        }}
+    }
+
+    local requestFunc = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+    if requestFunc then
+        sendReportModalBtn.Text = "ENVIANDO..."
+        sendReportModalBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+
+        task.spawn(function()
+            requestFunc({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode(payload)
+            })
+            
+            sendReportModalBtn.Text = "¡ENVIADO CON ÉXITO! ✓"
+            sendReportModalBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 80)
+            
+            task.delay(1.2, function()
+                reportModalFrame.Visible = false
+                reportReasonBox.Text = ""
+                sendReportModalBtn.Text = "ENVIAR REPORTE"
+                sendReportModalBtn.BackgroundColor3 = Color3.fromRGB(210, 80, 0)
+            end)
+        end)
+    end
+end
+
+local function stopSpectating()
+    spectatingTarget = nil
+    spectateBar.Visible = false
+    reportModalFrame.Visible = false
+    
+    if LocalPlayer.Character then
+        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            Camera.CameraSubject = hum
+        else
+            Camera.CameraSubject = LocalPlayer.Character
+        end
+    end
+end
+
+local function setSpectateTarget(plr)
+    if not plr or not plr.Character then return end
+    
+    local targetSubject = plr.Character:FindFirstChildOfClass("Humanoid") or plr.Character:FindFirstChild("HumanoidRootPart")
+    if targetSubject then
+        Camera.CameraSubject = targetSubject
+        spectatingTarget = plr
+        
+        specNameLabel.Text = plr.DisplayName
+        currentUsernameToCopy = plr.Name
+        userCopyBtn.Text = "@" .. plr.Name
+        userCopyBtn.TextColor3 = Color3.fromRGB(0, 200, 255)
+
+        pcall(function()
+            specAvatar.Image = Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+        end)
+        spectateBar.Visible = true
+    end
+end
+
+local function createPlayerCard(plr)
+    local card = Instance.new("Frame")
+    card.Name = "Card_" .. plr.Name
+    card.Size = UDim2.new(1, 0, 0, 34)
+    card.BackgroundColor3 = Color3.fromRGB(22, 25, 33)
+    card.Parent = scroll
+
+    local cardCorner = Instance.new("UICorner")
+    cardCorner.CornerRadius = UDim.new(0, 5)
+    cardCorner.Parent = card
+
+    local avatarImg = Instance.new("ImageLabel")
+    avatarImg.Size = UDim2.new(0, 24, 0, 24)
+    avatarImg.Position = UDim2.new(0, 4, 0.5, -12)
+    avatarImg.BackgroundTransparency = 1
+    pcall(function()
+        avatarImg.Image = Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+    end)
+    avatarImg.Parent = card
+
+    local imgCorner = Instance.new("UICorner")
+    imgCorner.CornerRadius = UDim.new(1, 0)
+    imgCorner.Parent = avatarImg
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(0, 80, 1, 0)
+    nameLabel.Position = UDim2.new(0, 32, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = plr.DisplayName
+    nameLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+    nameLabel.Font = Enum.Font.SourceSans
+    nameLabel.TextSize = 10
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLabel.Parent = card
+
+    local verBtn = Instance.new("TextButton")
+    verBtn.Size = UDim2.new(0, 35, 0, 20)
+    verBtn.Position = UDim2.new(1, -121, 0.5, -10)
+    verBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    verBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    verBtn.Text = "VER"
+    verBtn.Font = Enum.Font.SourceSansBold
+    verBtn.TextSize = 9
+    verBtn.Parent = card
+
+    local tpBtn = Instance.new("TextButton")
+    tpBtn.Size = UDim2.new(0, 35, 0, 20)
+    tpBtn.Position = UDim2.new(1, -83, 0.5, -10)
+    tpBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 235)
+    tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpBtn.Text = "TP"
+    tpBtn.Font = Enum.Font.SourceSansBold
+    tpBtn.TextSize = 9
+    tpBtn.Parent = card
+
+    local salirBtn = Instance.new("TextButton")
+    salirBtn.Size = UDim2.new(0, 42, 0, 20)
+    salirBtn.Position = UDim2.new(1, -45, 0.5, -10)
+    salirBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+    salirBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    salirBtn.Text = "SALIR"
+    salirBtn.Font = Enum.Font.SourceSansBold
+    salirBtn.TextSize = 9
+    salirBtn.Parent = card
+
+    verBtn.MouseButton1Click:Connect(function()
+        setSpectateTarget(plr)
+    end)
+
+    tpBtn.MouseButton1Click:Connect(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = plr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+        end
+    end)
+
+    salirBtn.MouseButton1Click:Connect(function()
+        stopSpectating()
+    end)
+end
+
+local function updateList()
+    for _, child in ipairs(scroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    local playersList = Players:GetPlayers()
+    onlineLabel.Text = "Online: " .. #playersList
+    local filterText = string.lower(searchBox.Text)
+
+    for _, plr in ipairs(playersList) do
+        if filterText == "" or string.find(string.lower(plr.DisplayName), filterText) or string.find(string.lower(plr.Name), filterText) then
+            createPlayerCard(plr)
+        end
+    end
+end
+
+toggleButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = true
+    toggleButton.Visible = false
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    toggleButton.Visible = true
+end)
+
+dejarVerBtn.MouseButton1Click:Connect(stopSpectating)
+
+reportBtn.MouseButton1Click:Connect(function()
+    if spectatingTarget then
+        reportReasonBox.Text = ""
+        reportModalFrame.Visible = true
+    end
+end)
+
+closeReportModalBtn.MouseButton1Click:Connect(function()
+    reportModalFrame.Visible = false
+end)
+
+sendReportModalBtn.MouseButton1Click:Connect(function()
+    if spectatingTarget then
+        local cleanReason = string.gsub(reportReasonBox.Text, "^%s*(.-)%s*$", "%1")
+        if cleanReason == "" then
+            sendReportModalBtn.Text = "¡Debes escribir una razón!"
+            sendReportModalBtn.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
+            task.delay(1.5, function()
+                sendReportModalBtn.Text = "ENVIAR REPORTE"
+                sendReportModalBtn.BackgroundColor3 = Color3.fromRGB(210, 80, 0)
+            end)
+            return
+        end
+        sendDiscordReport(spectatingTarget, cleanReason)
+    end
+end)
+
+refreshBtn.MouseButton1Click:Connect(updateList)
+searchBox:GetPropertyChangedSignal("Text"):Connect(updateList)
+Players.PlayerAdded:Connect(updateList)
+Players.PlayerRemoving:Connect(updateList)
+
+updateList()
